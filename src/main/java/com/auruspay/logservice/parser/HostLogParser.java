@@ -1,4 +1,4 @@
-package com.auruspay.logservice.parser.host;
+package com.auruspay.logservice.parser;
 
 import java.util.*;
 
@@ -8,14 +8,13 @@ import org.springframework.stereotype.Component;
 
 import com.auruspay.logservice.decryptor.AurusDecryptor;
 import com.auruspay.logservice.dto.LogRequest;
-import com.auruspay.logservice.dto.ZabaxRequest;
 
 @Component
 public class HostLogParser {
 
     private static final Logger log = LoggerFactory.getLogger(HostLogParser.class);
 
-    public Map<String, Object> parseLog(ZabaxRequest zabaxRequest ,LogRequest request, String logDetails) {
+    public Map<String, Object> parseLog(LogRequest request, String logDetails) {
 
         long startTime = System.currentTimeMillis();
 
@@ -30,13 +29,15 @@ public class HostLogParser {
         if (logDetails == null || logDetails.isEmpty()) {
             log.warn("Empty logDetails received for UUID={}", uuid);
             map.put("IssuesCount", 0);
+            map.put("Issues", Collections.emptyMap());
             map.put("LogDetails", "");
             return map;
         }
 
         String[] logLines = logDetails.split("\\r?\\n");
 
-        List<String> issues = new ArrayList<>();
+        Map<String, String> issues = new LinkedHashMap<>();
+        int issueCount = 1;
 
         for (String line : logLines) {
 
@@ -46,18 +47,13 @@ public class HostLogParser {
             log.debug("Processing line: {}", line);
 
             processLine(line, "AURUSPAY ENCRYPTED REQUEST :", "AurusReq", map);
-            processLine(line, "[STPL-GRAY-STREAM]- REQUEST :", "ProcReq", map);
-
-            if (line.contains("[STPL-GRAY-STREAM]-FINAL RESPONSE :")) {
-                processLine(line, "[STPL-GRAY-STREAM]-FINAL RESPONSE :", "ProcRes", map);
-            } else if (line.contains("[STPL-GRAY-STREAM]-TRANSACTION RESPONSE :")) {
-                processLine(line, "[STPL-GRAY-STREAM]-TRANSACTION RESPONSE :", "ProcRes", map);
-            }
-
+            processLine(line, "[STPL-GRAY-STREAM]-PROCESSOR REQUEST :", "ProcReq", map);
+            processLine(line, "[STPL-GRAY-STREAM]-PROCESSOR RESPONSE :", "ProcRes", map);
             processLine(line, "AURUSPAY ENCRYPTED RESPONSE :", "AurusRes", map);
 
+            // 🔹 Detect issues
             if (line.matches(".*(ERROR|Exception|Timeout|Declined|Failed).*")) {
-                issues.add(line.trim());
+                issues.put("Issue " + issueCount++, line.trim());
             }
         }
 

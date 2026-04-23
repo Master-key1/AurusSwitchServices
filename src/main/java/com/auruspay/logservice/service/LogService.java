@@ -9,7 +9,8 @@ import org.springframework.stereotype.Service;
 import com.auruspay.logservice.client.ZabbixClient;
 import com.auruspay.logservice.dto.LogRequest;
 import com.auruspay.logservice.dto.ZabaxRequest;
-import com.auruspay.logservice.parser.host.HostLogParser;
+import com.auruspay.logservice.parser.AtvLogParser;
+import com.auruspay.logservice.parser.HostLogParser;
 
 @Service
 public class LogService {
@@ -18,20 +19,22 @@ public class LogService {
 
     private final ZabbixClient zabbixClient;
     private final HostLogParser hostLogParser;
+    private final AtvLogParser atvLogParser;
 
-    public LogService(ZabbixClient zabbixClient, HostLogParser hostLogParser) {
+    public LogService(ZabbixClient zabbixClient, HostLogParser hostLogParser,AtvLogParser atvLogParser) {
         this.zabbixClient = zabbixClient;
         this.hostLogParser = hostLogParser;
+        this.atvLogParser =atvLogParser;
     }
 
-    public Map<String, Object> getLogs(ZabaxRequest zabaxRequest ,LogRequest request) {
+    public Map<String, Object> getLogs(ZabaxRequest zabaxRequest ,LogRequest request,String team) {
 
         long startTime = System.currentTimeMillis();
 
         // 🔥 Validation (FIXED)
         if (request.getIp() == null || request.getIp().isEmpty() ||
             request.getUuid() == null || request.getUuid().isEmpty() ||
-            request.getLogPath() == null || request.getLogPath().isEmpty()) {
+            request.getLogPath() == null || request.getLogPath().isEmpty() || team.isBlank()) {
 
             log.error("Invalid request received: {}", request);
             throw new RuntimeException("Invalid Details: ip/uuid/logPath required");
@@ -48,8 +51,14 @@ public class LogService {
             log.debug("Raw log response received (length={} chars)",
                     logDetails != null ? logDetails.length() : 0);
 
+            
             // 🔄 Parsing logs
-            Map<String, Object> dataMap = hostLogParser.parseLog( zabaxRequest , request, logDetails);
+            Map<String, Object> dataMap = null;
+            if(team.equals("HOST")) {
+            dataMap = hostLogParser.parseLog(  request, logDetails);
+            }else  if(team.equals("ATV")) {
+            dataMap = atvLogParser.parseLog(  request, logDetails);
+            }
 
             long duration = System.currentTimeMillis() - startTime;
 
